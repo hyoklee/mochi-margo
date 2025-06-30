@@ -1,0 +1,27 @@
+name: conda
+
+on:
+  workflow_dispatch:
+  push:
+     branches:
+       - main
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+      - name: miniconda
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-update-conda: true
+          python-version: 3.12.9
+          channels: conda-forge,iowarp
+      - name: build-conda
+        run: |
+          export CMAKE_PREFIX_PATH=$CONDA_PREFIX
+          env
+          conda install -y conda-build
+          conda install -y conda-verify
+          conda-build .
