@@ -9,6 +9,7 @@ source:
 requirements:
   build:
     - autoconf
+    - boost
     - json-c
   run:
     - python
@@ -16,6 +17,7 @@ requirements:
 test:
   requires:
     - autoconf
+    - boost
     - json-c    
   commands:
     - pip --help
