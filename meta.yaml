@@ -9,12 +9,14 @@ source:
 requirements:
   build:
     - autoconf
+    - json-c
   run:
     - python
 
 test:
   requires:
     - autoconf
+    - json-c    
   commands:
     - pip --help
 
