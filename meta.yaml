@@ -11,14 +11,20 @@ requirements:
     - autoconf
     - boost
     - json-c
+    - iowarp::argobots
+    - iowarp::mercury
   run:
     - python
+    - iowarp::argobots
+    - iowarp::mercury    
 
 test:
   requires:
     - autoconf
     - boost
-    - json-c    
+    - json-c
+    - iowarp::argobots
+    - iowarp::mercury    
   commands:
     - pip --help
 
