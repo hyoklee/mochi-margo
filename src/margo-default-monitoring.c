@@ -351,6 +351,8 @@ typedef struct default_monitor_state {
     int stats_pretty_json;       /* use tabs and stuff in JSON printing */
     int time_series_pretty_json; /* use tabs and stuff in JSON printing */
     int sample_progress_every;
+    /* self address */
+    char* self_addr_str;
     /* sampling counter */
     uint64_t progress_sampling;
     /* RPC information */
@@ -634,6 +636,15 @@ static void* __margo_default_monitor_initialize(margo_instance_id   mid,
         release_bulk_session(monitor, bulk_session);
     }
 
+    /* get self address */
+    char      self_addr_str[256] = {0};
+    hg_size_t self_addr_size = 256;
+    hg_addr_t self_addr = HG_ADDR_NULL;
+    margo_addr_self(mid, &self_addr);
+    margo_addr_to_string(mid, self_addr_str, &self_addr_size, self_addr);
+    margo_addr_free(mid, self_addr);
+    monitor->self_addr_str = strdup(self_addr_str[0] ? self_addr_str : "<unknown>");
+
     return (void*)monitor;
 }
 
@@ -703,6 +714,8 @@ static void __margo_default_monitor_finalize(void* uargs)
     ABT_key_free(&(monitor->callpath_key));
     /* free filename */
     free(monitor->filename_prefix);
+    /* free self_addr */
+    free(monitor->self_addr_str);
     free(monitor);
 }
 
@@ -1975,14 +1988,8 @@ monitor_statistics_to_json(const default_monitor_state_t* state, bool reset)
 {
     struct json_object* json = json_object_new_object();
     // add self address
-    char      self_addr_str[256] = {0};
-    hg_size_t self_addr_size     = 256;
-    hg_addr_t self_addr          = HG_ADDR_NULL;
-    margo_addr_self(state->mid, &self_addr);
-    margo_addr_to_string(state->mid, self_addr_str, &self_addr_size, self_addr);
-    margo_addr_free(state->mid, self_addr);
     json_object_object_add_ex(json, "address",
-                              json_object_new_string(self_addr_str),
+                              json_object_new_string(state->self_addr_str),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     // mercury progress loop statistic
     json_object_object_add_ex(json, "progress_loop",
@@ -2166,6 +2173,34 @@ monitor_statistics_to_json(const default_monitor_state_t* state, bool reset)
         ABT_mutex_unlock(
             ABT_MUTEX_MEMORY_GET_HANDLE(&state->bulk_transfer_stats_mtx));
     }
+    // add hostname and pid
+    char hostname[1024];
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+    pid_t pid = getpid();
+    json_object_object_add(json, "hostname", json_object_new_string(hostname));
+    json_object_object_add(json, "pid", json_object_new_int(pid));
+
+    // add command line
+    FILE* cmdline_file = fopen("/proc/self/cmdline", "r");
+    if (cmdline_file) {
+        char* cmdline = (char*)malloc(4096);
+        if (cmdline) {
+            size_t size = fread(cmdline, 1, 4096, cmdline_file);
+            struct json_object* cmdline_json = json_object_new_array();
+            char* p = cmdline;
+            while (p < cmdline + size) {
+                size_t len = strlen(p);
+                if (len > 0) {
+                    json_object_array_add(cmdline_json, json_object_new_string(p));
+                }
+                p += len + 1;
+            }
+            json_object_object_add(json, "cmdline", cmdline_json);
+        }
+        free(cmdline);
+        fclose(cmdline_file);
+    }
     return json;
 }
 
@@ -2174,15 +2209,8 @@ monitor_time_series_to_json(const default_monitor_state_t* monitor, bool reset)
 {
     struct json_object* json = json_object_new_object();
     // add self address
-    char      self_addr_str[256] = {0};
-    hg_size_t self_addr_size     = 256;
-    hg_addr_t self_addr          = HG_ADDR_NULL;
-    margo_addr_self(monitor->mid, &self_addr);
-    margo_addr_to_string(monitor->mid, self_addr_str, &self_addr_size,
-                         self_addr);
-    margo_addr_free(monitor->mid, self_addr);
     json_object_object_add_ex(json, "address",
-                              json_object_new_string(self_addr_str),
+                              json_object_new_string(monitor->self_addr_str),
                               JSON_C_OBJECT_ADD_KEY_IS_NEW);
     /* RPC time series */
     struct json_object* rpcs = json_object_new_object();
